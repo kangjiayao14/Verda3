@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npm --prefix frontend ci && npm --prefix frontend run vercel-build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "echo skip-root-install",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/health", "destination": "/api/index" }
+  ]
+}

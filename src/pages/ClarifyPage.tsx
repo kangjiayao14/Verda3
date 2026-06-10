@@ -1,0 +1,140 @@
+import { useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { Sprout, ArrowRight, SkipForward } from 'lucide-react'
+import type { ClarifyQuestion } from '../types'
+import { submitClarify } from '../lib/api'
+import { fadeUp, stagger, VSunGlow } from '../components/ui'
+
+interface NavState {
+  query?: string
+  clarify?: ClarifyQuestion[]
+}
+
+export default function ClarifyPage() {
+  const { taskId } = useParams()
+  const navigate = useNavigate()
+  const { state } = useLocation() as { state: NavState | null }
+  const query = state?.query ?? ''
+  const questions = state?.clarify ?? []
+  const [answers, setAnswers] = useState<Record<string, unknown>>({})
+  const [submitting, setSubmitting] = useState(false)
+
+  // 无澄清问题（如直接刷新进入）：直接进工作台
+  if (!taskId || questions.length === 0) {
+    navigate(`/workspace/${taskId}`, { replace: true, state: { query } })
+    return null
+  }
+
+  function setSingle(qid: string, val: string) {
+    setAnswers((a) => ({ ...a, [qid]: val }))
+  }
+  function toggleMulti(qid: string, val: string) {
+    setAnswers((a) => {
+      const cur = (a[qid] as string[]) ?? []
+      return {
+        ...a,
+        [qid]: cur.includes(val) ? cur.filter((v) => v !== val) : [...cur, val],
+      }
+    })
+  }
+
+  async function go() {
+    if (submitting || !taskId) return
+    setSubmitting(true)
+    try {
+      await submitClarify(taskId, answers)
+    } finally {
+      navigate(`/workspace/${taskId}`, { state: { query } })
+    }
+  }
+
+  return (
+    <div className="relative min-h-screen overflow-y-auto bg-bg">
+      <VSunGlow className="opacity-40" />
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-[680px] flex-col justify-center px-6 py-16">
+        <motion.div variants={fadeUp} initial="initial" animate="animate" className="flex items-center gap-2.5">
+          <span className="grid h-10 w-10 place-items-center rounded-btn bg-primary-tint text-primary">
+            <Sprout size={22} strokeWidth={1.8} />
+          </span>
+          <div>
+            <div className="text-h3 text-ink">在开始前，请确认几个关键点</div>
+            <div className="text-aux text-ink-2">这能帮助专家队更精准地锁定调研范围</div>
+          </div>
+        </motion.div>
+
+        {query && (
+          <motion.div
+            variants={fadeUp}
+            initial="initial"
+            animate="animate"
+            className="mt-5 rounded-card border border-line/60 bg-card p-4 text-aux text-ink-2 shadow-card"
+          >
+            <span className="text-tag text-ink-3">你的需求</span>
+            <p className="mt-1 text-body text-ink">{query}</p>
+          </motion.div>
+        )}
+
+        <motion.div variants={stagger} initial="initial" animate="animate" className="mt-6 flex flex-col gap-5">
+          {questions.map((q) => (
+            <motion.div key={q.id} variants={fadeUp} className="rounded-card border border-line/60 bg-card p-5 shadow-card">
+              <p className="text-body font-medium text-ink">{q.question}</p>
+              {q.hint && <p className="mt-1 text-tag text-ink-3">{q.hint}</p>}
+
+              {q.type === 'text' ? (
+                <textarea
+                  rows={2}
+                  value={(answers[q.id] as string) ?? ''}
+                  onChange={(e) => setSingle(q.id, e.target.value)}
+                  placeholder="选填，可补充背景信息"
+                  className="mt-3 w-full resize-none rounded-btn border border-line bg-bg px-3 py-2 text-aux text-ink outline-none transition-colors focus:border-primary"
+                />
+              ) : (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(q.options ?? []).map((opt) => {
+                    const selected =
+                      q.type === 'multi'
+                        ? ((answers[q.id] as string[]) ?? []).includes(opt)
+                        : answers[q.id] === opt
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() =>
+                          q.type === 'multi' ? toggleMulti(q.id, opt) : setSingle(q.id, opt)
+                        }
+                        className={`rounded-chip px-4 h-9 text-aux font-medium transition-all ${
+                          selected
+                            ? 'bg-primary text-white shadow-card'
+                            : 'bg-primary-tint text-primary-deep hover:bg-primary-soft/40'
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </motion.div>
+          ))}
+        </motion.div>
+
+        <div className="mt-7 flex items-center justify-between">
+          <button
+            onClick={go}
+            className="inline-flex items-center gap-1.5 text-aux text-ink-3 transition-colors hover:text-ink-2"
+          >
+            <SkipForward size={15} /> 跳过，直接开始
+          </button>
+          <button
+            onClick={go}
+            disabled={submitting}
+            className="inline-flex items-center justify-center gap-2 rounded-btn bg-primary px-6 h-12 font-medium text-white shadow-card transition-all hover:bg-primary-deep hover:shadow-float active:scale-95 disabled:opacity-50"
+          >
+            {submitting ? '正在派遣专家队…' : '启动调研'}
+            <ArrowRight size={18} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
